@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magazine Covers</title>
+<meta name="description" content="An infinite, draggable archive of New York Times Magazine covers, 1896 to today.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📰</text></svg>">
+<style>
+  :root {
+    --bg: #101012; --ink: #efece5; --muted: #8e8a82; --paper: #1b1b1e; --line: #2b2b30; --accent: #e3c774;
+    --gap: 8px; --tile-w: 190px; --ratio: 0.72;              /* tile width / height */
+    --panel-w: 440px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+               font: 13px/1.45 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  a { color: inherit; }
+
+  #stage { position: fixed; inset: 0; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; overflow: hidden; }
+  html.dragging #stage { cursor: grabbing; }
+  #plane { position: absolute; left: 0; top: 0; will-change: transform; }
+  .tile { position: absolute; left: 0; top: 0; width: var(--tile-w); height: calc(var(--tile-w) / var(--ratio));
+          background: var(--paper); overflow: hidden; will-change: transform; }
+  .tile .im { position: absolute; inset: 0; will-change: transform;
+              transform: scale(var(--zoom, 1.12)) translate(var(--px, 0%), var(--py, 0%)); }
+  .tile img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; pointer-events: none;
+              opacity: 0; transition: opacity .4s ease; }
+  .tile img.ready { opacity: 1; }
+  .tile.active::after { content: ''; position: absolute; inset: 0; border: 2px solid var(--accent); pointer-events: none; }
+  .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 9px 8px; font-size: 11px; letter-spacing: .05em;
+               text-transform: uppercase; color: var(--ink); background: linear-gradient(transparent, rgba(0,0,0,.8));
+               opacity: 0; transition: opacity .25s; }
+  .tile:hover .cap { opacity: 1; }
+
+  header { position: fixed; left: 0; right: 0; top: 0; z-index: 3; display: flex; justify-content: space-between; align-items: baseline;
+           gap: 16px; padding: 16px 20px; pointer-events: none; mix-blend-mode: difference; }
+  header h1 { margin: 0; font: 600 16px/1 Georgia, "Times New Roman", serif; }
+  header .meta { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; opacity: .8; white-space: nowrap; }
+  #hud { position: fixed; left: 20px; bottom: 16px; z-index: 3; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+         opacity: .55; pointer-events: none; mix-blend-mode: difference; }
+  #jump { position: fixed; right: 20px; bottom: 14px; z-index: 3; display: flex; gap: 6px; align-items: center; font-size: 11px;
+          letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+  #jump select { font: inherit; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+
+  /* ---- detail panel */
+  #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(var(--panel-w), 100vw); z-index: 10; background: var(--paper);
+           border-left: 1px solid var(--line); transform: translateX(105%); transition: transform .45s cubic-bezier(.2,.8,.2,1);
+           display: grid; grid-template-rows: auto 1fr; box-shadow: -30px 0 60px rgba(0,0,0,.45); }
+  #panel.open { transform: none; }
+  #panel .bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line);
+                font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  #panel .bar .nav button, #panel .bar .close { background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 6px;
+                padding: 4px 9px; cursor: pointer; font: inherit; margin-left: 4px; }
+  #panel .body { overflow: auto; padding: 18px 20px 40px; }
+  #panel figure { margin: 0 0 18px; }
+  #panel figure img { display: block; width: 100%; height: auto; background: #000; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  #panel h2 { margin: 0 0 4px; font: 600 22px/1.15 Georgia, "Times New Roman", serif; }
+  #panel .era { color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 14px; }
+  #panel dl { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; margin: 0 0 16px; font-size: 12.5px; }
+  #panel dt { color: var(--muted); } #panel dd { margin: 0; }
+  #panel .desc { font-size: 13px; line-height: 1.55; color: #d6d2ca; white-space: pre-line; border-top: 1px solid var(--line); padding-top: 12px; }
+  #panel .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  #panel .links a { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; text-decoration: none; border: 1px solid var(--line);
+                    padding: 6px 10px; border-radius: 6px; color: var(--ink); }
+  #panel .links a:hover { border-color: var(--accent); color: var(--accent); }
+  #empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); font-style: italic; }
+
+  @media (max-width: 700px) {
+    :root { --tile-w: 120px; --gap: 5px; }
+    header h1 { font-size: 13px; } header .meta { display: none; } #jump { display: none; }
+    #panel { top: auto; height: 82vh; width: 100vw; border-left: 0; border-top: 1px solid var(--line); border-radius: 16px 16px 0 0;
+             transform: translateY(105%); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>The New York Times Magazine — Covers</h1>
+  <div class="meta" id="count"></div>
+</header>
+<div id="stage"><div id="plane"></div></div>
+<div id="hud">drag · scroll · click a cover for details</div>
+<div id="jump"><label for="year">Jump to</label><select id="year"></select></div>
+
+<aside id="panel" aria-hidden="true">
+  <div class="bar">
+    <span id="pos"></span>
+    <span class="nav"><button id="prev" title="Earlier (←)">←</button><button id="next" title="Later (→)">→</button><button class="close" id="close" title="Close (Esc)">✕</button></span>
+  </div>
+  <div class="body">
+    <figure><img id="pimg" alt=""></figure>
+    <h2 id="ptitle"></h2>
+    <div class="era" id="pera"></div>
+    <dl id="pmeta"></dl>
+    <div class="desc" id="pdesc"></div>
+    <div class="links" id="plinks"></div>
+  </div>
+</aside>
+
+<script>
+(async () => {
+  // Where the images live. On the deployed site they come from GitHub through jsDelivr;
+  // locally (file:// or localhost) from the repo folders.
+  const local = location.protocol === 'file:' || /^(localhost|127\.)/.test(location.hostname);
+  const IMG = local ? '' : 'https://cdn.jsdelivr.net/gh/ayoolafelix/nyt-magazine-covers@main/';
+
+  const data = await fetch('covers.json').then(r => r.json()).catch(() => ({ covers: [] }));
+  const covers = data.covers.slice().sort((a, b) => a.id < b.id ? -1 : 1);
+  const N = covers.length;
+  const countEl = document.getElementById('count');
+  if (!N) { document.body.insertAdjacentHTML('beforeend', '<div id="empty">No covers yet.</div>'); return; }
+  countEl.textContent = `${N} covers · ${covers[0].date.slice(0, 4)}–${covers[N - 1].date.slice(0, 4)}`;
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const label = c => { const [y, m, d] = c.date.split('-'); return `${c.approx ? '≈ ' : ''}${MONTHS[+m - 1]} ${+d}, ${y}`; };
+  const thumb = c => `${IMG}thumb/${c.id.slice(0, 4)}/${c.id}.jpg`;
+  const full = c => `${IMG}covers/${c.id.slice(0, 4)}/${c.id}.jpg`;
+
+  // ---- geometry
+  const stage = document.getElementById('stage'), plane = document.getElementById('plane');
+  const css = getComputedStyle(document.documentElement);
+  const GAP = parseFloat(css.getPropertyValue('--gap'));
+  const TW = parseFloat(css.getPropertyValue('--tile-w')), TH = TW / parseFloat(css.getPropertyValue('--ratio'));
+  const CW = TW + GAP, CH = TH + GAP;
+  const STRIDE = Math.max(8, Math.round(Math.sqrt(N * 1.6)));          // covers per row of the infinite plane
+  const mod = (a, b) => ((a % b) + b) % b;
+  const indexAt = (col, row) => mod(row * STRIDE + col, N);
+  const cellOf = i => ({ col: i % STRIDE, row: Math.floor(i / STRIDE) });
+
+  // ---- scroll state (target eased toward, as in the Codrops demo)
+  const scroll = { tx: 0, ty: 0, cx: 0, cy: 0, lx: 0, ly: 0, ease: 0.085 };
+  const mouse = { tx: .5, ty: .5, cx: .5, cy: .5, press: 0, pressT: 0 };
+
+  let cols = 0, rowsN = 0, tiles = [];
+  function build() {
+    cols = Math.ceil(innerWidth / CW) + 2; rowsN = Math.ceil(innerHeight / CH) + 2;
+    plane.innerHTML = ''; tiles = [];
+    const c0 = Math.floor(-scroll.cx / CW) - 1, r0 = Math.floor(-scroll.cy / CH) - 1;
+    for (let r = 0; r < rowsN; r++) for (let c = 0; c < cols; c++) {
+      const el = document.createElement('div'); el.className = 'tile';
+      const im = document.createElement('div'); im.className = 'im';
+      const img = document.createElement('img'); img.decoding = 'async'; img.onload = () => img.classList.add('ready');
+      const cap = document.createElement('div'); cap.className = 'cap';
+      im.append(img); el.append(im, cap); plane.append(el);
+      tiles.push(place({ el, img, cap, col: NaN, row: NaN }, c0 + c, r0 + r));
+    }
+  }
+  function place(t, col, row) {
+    t.col = col; t.row = row; t.idx = indexAt(col, row); t.cover = covers[t.idx];
+    t.el.style.transform = `translate(${col * CW}px, ${row * CH}px)`;
+    t.cap.textContent = t.img.alt = label(t.cover);
+    t.el.classList.toggle('active', t.idx === activeIdx);
+    const src = thumb(t.cover);
+    if (t.img.getAttribute('src') !== src) {
+      t.img.classList.remove('ready'); t.img.src = src;
+      if (t.img.complete && t.img.naturalWidth) t.img.classList.add('ready');
+    }
+    return t;
+  }
+  function layout() {
+    const c0 = Math.floor(-scroll.cx / CW) - 1, r0 = Math.floor(-scroll.cy / CH) - 1;
+    for (const t of tiles) {
+      let col = t.col, row = t.row;
+      while (col < c0) col += cols; while (col >= c0 + cols) col -= cols;
+      while (row < r0) row += rowsN; while (row >= r0 + rowsN) row -= rowsN;
+      if (col !== t.col || row !== t.row) place(t, col, row);
+    }
+  }
+
+  // ---- input
+  let dragging = false, drag = { x: 0, y: 0, sx: 0, sy: 0, moved: 0 }, vel = { x: 0, y: 0 }, lastMove = { x: 0, y: 0, t: 0 };
+  stage.addEventListener('pointerdown', e => {
+    dragging = true; document.documentElement.classList.add('dragging'); mouse.pressT = 1;
+    drag = { x: e.clientX, y: e.clientY, sx: scroll.tx, sy: scroll.ty, moved: 0 }; vel = { x: 0, y: 0 };
+    lastMove = { x: e.clientX, y: e.clientY, t: performance.now() }; stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    mouse.tx = e.clientX / innerWidth; mouse.ty = e.clientY / innerHeight;
+    if (!dragging) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    scroll.tx = drag.sx + dx; scroll.ty = drag.sy + dy; drag.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+    const now = performance.now(), dt = Math.max(1, now - lastMove.t);
+    vel = { x: (e.clientX - lastMove.x) / dt, y: (e.clientY - lastMove.y) / dt }; lastMove = { x: e.clientX, y: e.clientY, t: now };
+  });
+  const release = e => {
+    if (!dragging) return;
+    dragging = false; document.documentElement.classList.remove('dragging'); mouse.pressT = 0;
+    if (drag.moved < 6) { const el = e.target.closest('.tile'); const t = tiles.find(x => x.el === el); if (t) openPanel(t.idx); }
+    else { scroll.tx += vel.x * 180; scroll.ty += vel.y * 180; }        // a little throw on release
+  };
+  stage.addEventListener('pointerup', release); stage.addEventListener('pointercancel', release);
+  stage.addEventListener('wheel', e => { e.preventDefault(); scroll.tx -= e.deltaX * 0.6; scroll.ty -= e.deltaY * 0.6; }, { passive: false });
+  addEventListener('keydown', e => {
+    if (panel.classList.contains('open') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { step(e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault(); return; }
+    const k = { ArrowLeft: [CW, 0], ArrowRight: [-CW, 0], ArrowUp: [0, CH], ArrowDown: [0, -CH] }[e.key];
+    if (k) { scroll.tx += k[0]; scroll.ty += k[1]; e.preventDefault(); }
+    if (e.key === 'Escape') closePanel();
+  });
+  addEventListener('resize', build);
+
+  // ---- frame: ease scroll, squash from velocity, image parallax + press zoom (uniform across tiles)
+  (function frame() {
+    scroll.cx += (scroll.tx - scroll.cx) * scroll.ease; scroll.cy += (scroll.ty - scroll.cy) * scroll.ease;
+    const dx = scroll.cx - scroll.lx, dy = scroll.cy - scroll.ly; scroll.lx = scroll.cx; scroll.ly = scroll.cy;
+    mouse.cx += (mouse.tx - mouse.cx) * .05; mouse.cy += (mouse.ty - mouse.cy) * .05; mouse.press += (mouse.pressT - mouse.press) * .08;
+    const st = plane.style;
+    st.setProperty('--px', `${(-(mouse.cx - .5) * 6).toFixed(2)}%`); st.setProperty('--py', `${(-(mouse.cy - .5) * 6).toFixed(2)}%`);
+    st.setProperty('--zoom', (1.12 + 0.1 * mouse.press).toFixed(3));
+    const sk = Math.max(-4, Math.min(4, dx * 0.08)), sy = 1 + Math.min(Math.abs(dy) / 400, 0.06);
+    st.transform = `translate3d(${scroll.cx}px, ${scroll.cy}px, 0) skewX(${sk.toFixed(2)}deg) scaleY(${sy.toFixed(3)})`;
+    layout(); requestAnimationFrame(frame);
+  })();
+
+  // ---- year jump
+  const yearSel = document.getElementById('year');
+  const years = [...new Set(covers.map(c => c.date.slice(0, 4)))];
+  yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  yearSel.addEventListener('change', () => scrollToIndex(covers.findIndex(c => c.date.startsWith(yearSel.value))));
+  function scrollToIndex(i) {
+    if (i < 0) return;
+    const { col, row } = cellOf(i);
+    scroll.tx = -(col * CW) + innerWidth / 2 - TW / 2; scroll.ty = -(row * CH) + innerHeight / 2 - TH / 2;
+  }
+
+  // ---- detail panel
+  const panel = document.getElementById('panel');
+  let activeIdx = -1;
+  const $ = id => document.getElementById(id);
+  function openPanel(i) {
+    activeIdx = i; const c = covers[i];
+    panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false');
+    tiles.forEach(t => t.el.classList.toggle('active', t.idx === i));
+    $('pos').textContent = `${i + 1} / ${N}`;
+    $('pimg').src = full(c); $('pimg').alt = label(c);
+    $('ptitle').textContent = label(c);
+    $('pera').textContent = c.era;
+    const rows = [];
+    rows.push(['Issue date', c.approx ? `approximate — Coverjunkie posted it ${c.cj?.posted || ''}; the printed date wasn't legible` : c.date]);
+    if (c.source === 'ia') rows.push(['Source', `Internet Archive microfilm scan, page ${c.ia.page} of the Sunday paper`]);
+    if (c.source === 'coverjunkie') rows.push(['Source', 'Coverjunkie']);
+    if (c.px) rows.push(['Image', `${c.px[0]} × ${c.px[1]} px`]);
+    $('pmeta').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    $('pdesc').textContent = c.desc || '';
+    $('pdesc').style.display = c.desc ? '' : 'none';
+    const links = [[full(c), 'Full size ↗']];
+    if (c.ia) links.push([c.ia.url, 'View the scanned issue ↗']);
+    if (c.cj) links.push([c.cj.url, 'On Coverjunkie ↗']);
+    $('plinks').innerHTML = links.map(([h, t]) => `<a href="${h}" target="_blank" rel="noopener">${t}</a>`).join('');
+    panel.querySelector('.body').scrollTop = 0;
+    yearSel.value = c.date.slice(0, 4);
+  }
+  function closePanel() { panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); activeIdx = -1; tiles.forEach(t => t.el.classList.remove('active')); }
+  function step(d) { if (activeIdx < 0) return; const i = mod(activeIdx + d, N); openPanel(i); scrollToIndex(i); }
+  $('close').addEventListener('click', closePanel); $('prev').addEventListener('click', () => step(-1)); $('next').addEventListener('click', () => step(1));
+
+  // start a little way in, on the most recent covers
+  build(); scrollToIndex(N - 1); scroll.cx = scroll.tx; scroll.cy = scroll.ty; scroll.lx = scroll.cx; scroll.ly = scroll.cy; build();
+})();
+</script>
+</body>
+</html>

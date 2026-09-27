@@ -1,0 +1,9 @@
+# images are served from GitHub via jsDelivr, not from Vercel (100 MB deploy limit)
+covers/
+thumb/
+.venv/
+node_modules/
+logs/
+scripts/
+data/
+state*.json
