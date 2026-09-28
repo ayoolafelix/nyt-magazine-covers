@@ -189,6 +189,12 @@ def main():
         out.append({
             "d": cid,
             "t": display_date(cid, bool(c.get("approx"))),
+            # `grid` is a 420px WebP served by Vercel alongside the site: it is
+            # what the WebGL texture loader requests, and it is the only image
+            # the page fetches in bulk. `thumb` stays on the CDN because the
+            # colour sampler falls back to it for covers whose grid texture
+            # has not been built yet. `full` is fetched one at a time on click.
+            "grid": f"grid/{y}/{cid}.webp",
             "thumb": f"{CDN}thumb/{y}/{cid}.jpg",
             "full": f"{CDN}covers/{y}/{cid}.jpg",
             "src": (c.get("cj") or {}).get("url", ""),

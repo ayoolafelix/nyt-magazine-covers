@@ -71,7 +71,13 @@ const PARALLAX_PERIOD = 2.5;  // rows of travel per full lead/lag cycle
 const MAX_TEXTURES = 600;
 const MAX_INFLIGHT = 24;
 const PRE_ROWS = 8;
-const WARM_ON_BOOT = 260;
+/* Textures warmed before first paint. This was 260, which at the time meant
+   260 requests at 54 KB each. jsDelivr answers even a cache HIT in 2.5-4.5s
+   and drops a 24-way burst entirely, so a warm that size stalled the grid
+   instead of speeding it up. The textures are now 420px WebP served by
+   Vercel, and the loader paints whatever has arrived rather than waiting, so
+   a smaller warm reaches the same visible result sooner. */
+const WARM_ON_BOOT = 90;
 const ROW_STEP = 2;         // content advances twice per row of travel
 const ROW_SPARE = 2;         // headroom rows drawn past each end of the viewport           // content advances twice per row of travel
 
@@ -207,7 +213,7 @@ function pump() {
     for (const [k, p] of pending) if (p < bestP) { bestP = p; best = k; }
     pending.delete(best);
     inflight++;
-    texLoader.load(covers[best].thumb, (tex) => {
+    texLoader.load(covers[best].grid || covers[best].thumb, (tex) => {
       inflight--;
       tex.minFilter = THREE.LinearFilter;
       tex.generateMipmaps = false;
@@ -618,7 +624,7 @@ function openPane(idx) {
 
   pane.style.setProperty('--pane-bg', '#121216');
   pane.style.setProperty('--pane-glow', 'rgba(255,255,255,.06)');
-  dominantColour(c.thumb).then((col) => pane.style.setProperty('--pane-bg', col));
+  dominantColour(c.grid).then((col) => pane.style.setProperty('--pane-bg', col));
 
   pane.classList.add('open');
   pane.setAttribute('aria-hidden', 'false');

@@ -1,9 +1,13 @@
-# images are served from GitHub via jsDelivr, not from Vercel (100 MB deploy limit)
+# Full-resolution scans (85 MB) are still served from GitHub via jsDelivr; only
+# the click-to-open view needs them, one at a time. The 420px grid textures in
+# web/public/grid are deployed with the site because the grid fetches those in
+# bulk and jsDelivr is far too slow to paint a screen with.
 covers/
 thumb/
 .venv/
-node_modules/
+web/node_modules/
 logs/
 scripts/
 data/
 state*.json
+web/dist/
