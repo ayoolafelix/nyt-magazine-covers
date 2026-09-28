@@ -492,11 +492,28 @@ const paneFig   = document.getElementById('paneFig');
 const paneImg   = document.getElementById('paneImg');
 const paneDate  = document.getElementById('paneDate');
 const paneCap   = document.getElementById('paneCaption');
+const paneMeta = document.getElementById('paneMeta');
 const paneCredit = document.getElementById('paneCredit');
-const paneCredits = document.getElementById('paneCredits');
 const paneRowCredit = document.getElementById('paneRowCredit');
-const paneRowCredits = document.getElementById('paneRowCredits');
 const paneSource = document.getElementById('paneSource');
+
+/* Crew rows are built on demand and torn down on every open, so the list
+   never accumulates rows from a previously viewed cover. They are appended
+   after paneRowCredit so the order is always: cover credit, then crew. */
+const CREW_CLASS = 'pane__row--crew';
+function clearCrew() {
+  for (const el of paneMeta.querySelectorAll('.' + CREW_CLASS)) el.remove();
+}
+function addCrewRow(role, name) {
+  const row = document.createElement('div');
+  row.className = 'pane__row ' + CREW_CLASS;
+  const dt = document.createElement('dt');
+  dt.textContent = role;
+  const dd = document.createElement('dd');
+  dd.textContent = name;
+  row.append(dt, dd);
+  paneMeta.append(row);
+}
 
 /* Sample the cover's dominant colour and tint the pane with it.
    Works from the 280px WebP (~20 KB), not the multi-MB original, and caches
@@ -590,20 +607,13 @@ function openPane(idx) {
   // of the archive; the row is hidden rather than left empty under a heading.
   const hasCredit = !!m.credit;
   const hasCrew   = !!(m.credits && m.credits.length);
-  paneRowCredit.hidden  = !hasCredit;
-  paneRowCredits.hidden = !hasCrew;
+  paneRowCredit.hidden = !hasCredit;
+  clearCrew();
   if (hasCredit) paneCredit.textContent = m.credit;
-  if (hasCrew) {
-    paneCredits.replaceChildren(...m.credits.map(([role, name]) => {
-      const row = document.createElement('div');
-      const dt = document.createElement('dt');
-      dt.textContent = role;
-      const dd = document.createElement('dd');
-      dd.textContent = name;
-      row.append(dt, dd);
-      return row;
-    }));
-  }
+  if (hasCrew) for (const [role, name] of m.credits) addCrewRow(role, name);
+  // the whole block goes when there is nothing to put in it, so the pane
+  // never shows a bare rule under the date
+  paneMeta.hidden = !hasCredit && !hasCrew;
 
   // Every cover here came from a Coverjunkie scan so the source link is
   // present, but it stays guarded: an absent link must not render as a

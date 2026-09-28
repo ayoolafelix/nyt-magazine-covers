@@ -47,15 +47,16 @@
       </figure>
       <h2 class="pane__date" id="paneDate">&nbsp;</h2>
 
-      <div class="pane__row" id="paneRowCredit" hidden>
-        <dl class="pane__meta">
+      <!-- .pane__meta is the one definition list. Every label/value pair is a
+           .pane__row inside it, and the row is what carries the two-column
+           grid. The rows must stay children of the dl rather than wrapping it:
+           a row wrapped around the dl would squeeze the whole list into the
+           label column. Crew rows are injected after paneRowCredit. -->
+      <dl class="pane__meta" id="paneMeta" hidden>
+        <div class="pane__row" id="paneRowCredit" hidden>
           <dt>Cover</dt><dd id="paneCredit"></dd>
-        </dl>
-      </div>
-
-      <div class="pane__row pane__row--crew" id="paneRowCredits" hidden>
-        <dl class="pane__meta" id="paneCredits"></dl>
-      </div>
+        </div>
+      </dl>
 
       <a class="pane__source" id="paneSource" href="#" target="_blank" rel="noopener noreferrer">original scan &nearr;</a>
     </div>

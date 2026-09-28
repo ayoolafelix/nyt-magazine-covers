@@ -284,7 +284,7 @@ body.dragging { cursor: grabbing; }
 }
 .pane__row {
   display: grid;
-  grid-template-columns: 5.2rem 1fr;
+  grid-template-columns: minmax(0, 5.2rem) minmax(0, 1fr);
   gap: 0 1rem;
 }
 .pane__row[hidden] { display: none; }
@@ -377,23 +377,45 @@ body.dragging { cursor: grabbing; }
   .colophon { font-size: 9.5px; letter-spacing: .1em; }
 }
 
-/* ---- detail pane additions for the Times Magazine build ------------------
-   The crew block is a list of role/name pairs parsed from free text, so it
-   is a label-and-value list rather than the two fixed rows the New Yorker
-   pane used. Roles sit in a fixed column so the names align into a readable
-   edge however long the role names are. */
-.pane__row--crew .pane__meta {
-  border-top: 1px solid rgba(244, 241, 234, .12);
-  gap: .3rem;
-}
-.pane__row--crew .pane__meta > div {
-  display: grid;
-  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
-  gap: .7rem;
+/* ---- crew rows ----------------------------------------------------------
+   Each crew entry is its own .pane__row inside the one .pane__meta list, so
+   it inherits the block's top rule and spacing rather than drawing its own.
+   The label column widens to fit role names like "Deputy Art Director",
+   which the 5.2rem column used for the single cover-credit row cannot. */
+.pane__row--crew {
+  grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr);
+  gap: 0 0.9rem;
   align-items: baseline;
 }
-.pane__row--crew .pane__meta dt { padding-top: 0; }
-.pane__row--crew .pane__meta dd { min-width: 0; overflow-wrap: anywhere; }
+.pane__row--crew dt {
+  letter-spacing: .12em;
+  color: rgba(244, 241, 234, .34);
+}
+.pane__row--crew dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The cover credit is the one row that reads as a sentence ("Photography by
+   Alex Prager") rather than a name, so it gets the body weight and the
+   leading it deserves. */
+#paneRowCredit dd {
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: rgba(244, 241, 234, .92);
+}
+
+/* On a phone the pane is a bottom sheet and the label column is precious.
+   Stacking the label above its value keeps long role names from squeezing
+   the names into a two-word column. */
+@media (max-width: 700px) {
+  .pane__row,
+  .pane__row--crew {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .18rem;
+  }
+  .pane__row--crew dd { padding-bottom: .5rem; }
+}
 
 .pane__source {
   display: inline-block;
@@ -408,4 +430,6 @@ body.dragging { cursor: grabbing; }
 .pane__source[hidden] { display: none; }
 .pane__source:hover { color: rgba(244, 241, 234, .92); }
 
+/* The caption carries the approximate-date note, which is body copy and not a
+   caption in the photographic sense. */
 .pane__fig figcaption:empty { display: none; }
