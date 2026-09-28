@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Every New York Times Magazine Cover, 1948&ndash;2026</title>
+<meta name="description" content="520 New York Times Magazine covers from 1948 to 2026, as an infinite draggable WebGL grid." />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poiret+One&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- parallax backdrop: layers drift at different rates behind the grid -->
+  <div class="backdrop" aria-hidden="true">
+    <div class="layer l1" data-depth="0.06"></div>
+    <div class="layer l2" data-depth="0.12"></div>
+    <div class="layer l3" data-depth="0.20"></div>
+  </div>
+
+  <canvas id="gl"></canvas>
+
+  <header class="hud">
+    <h1>New York Times <span>Magazine Covers</span></h1>
+  </header>
+
+  <a class="credit" id="credit" href="#" target="_blank" rel="noopener noreferrer">click for full size</a>
+
+  <p class="colophon">
+    <svg class="colophon__heart" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><path d="M1.24264 8.24264L8 15L14.7574 8.24264C15.553 7.44699 16 6.36786 16 5.24264V5.05234C16 2.8143 14.1857 1 11.9477 1C10.7166 1 9.55233 1.55959 8.78331 2.52086L8 3.5L7.21669 2.52086C6.44767 1.55959 5.28338 1 4.05234 1C1.8143 1 0 2.8143 0 5.05234V5.24264C0 6.36786 0.44699 7.44699 1.24264 8.24264Z" fill="currentColor"/></svg>
+    <span>&bull; <a class="colophon__link" href="https://x.com/ayoolafelix" target="_blank" rel="noopener noreferrer">Maester</a> &amp; The Machine</span>
+  </p>
+
+  <div class="stalker" id="stalker" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.0393066 10.1607L3.98955 14.1109C5.19911 15.3205 6.83963 16 8.55021 16C12.1123 16 15 13.1124 15 9.55026L15 2H13V6H11V0L9 2.38497e-08V6H7V1L5 1L4.99995 10.8787L2.16063 8.03934L0.0393066 10.1607Z" fill="white"/></svg></div>
+  <div class="loader" id="loader"><span>loading covers&hellip;</span></div>
+
+  <!-- detail pane, slides in from the right -->
+  <aside class="pane" id="pane" aria-hidden="true" role="dialog" aria-label="Cover detail">
+    <button class="pane__close" id="paneClose" aria-label="Close">&times;</button>
+    <div class="pane__scroll">
+      <figure class="pane__fig" id="paneFig">
+        <img id="paneImg" alt="" />
+        <figcaption id="paneCaption"></figcaption>
+      </figure>
+      <h2 class="pane__date" id="paneDate">&nbsp;</h2>
+
+      <div class="pane__row" id="paneRowCredit" hidden>
+        <dl class="pane__meta">
+          <dt>Cover</dt><dd id="paneCredit"></dd>
+        </dl>
+      </div>
+
+      <div class="pane__row pane__row--crew" id="paneRowCredits" hidden>
+        <dl class="pane__meta" id="paneCredits"></dl>
+      </div>
+
+      <a class="pane__source" id="paneSource" href="#" target="_blank" rel="noopener noreferrer">original scan &nearr;</a>
+    </div>
+  </aside>
+  <div class="pane__scrim" id="paneScrim" hidden></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

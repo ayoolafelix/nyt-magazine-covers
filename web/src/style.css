@@ -1,0 +1,411 @@
+:root {
+  --paper: #f4f1ea;
+  --ink: #16161a;
+  --accent: #c8102e; /* the Eustis Tilley red */
+  --gap: 14px;
+  /* Poiret One for display headings; Jost is the open stand-in for Futura,
+     which is a licensed face and cannot be self-hosted from Google Fonts. */
+  --font-head: "Poiret One", "Futura", "Century Gothic", sans-serif;
+  --font-body: "Jost", "Futura", "Avenir Next", "Century Gothic", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #0d0d10;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body.dragging { cursor: grabbing; }
+
+/* ---------------------------------------------------------------- backdrop
+   Parallax layers from the nemutas/draggable approach: each layer is pinned
+   and translated by a fraction of the scroll distance, so depth reads as
+   differential drift rather than a single flat pan.                     */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+.backdrop .layer {
+  position: absolute;
+  inset: -25%;
+  will-change: transform;
+}
+.l1 {
+  background:
+    radial-gradient(120% 90% at 50% 8%, #2a2a33 0%, #14141a 55%, #0d0d10 100%);
+}
+.l2 {
+  background:
+    radial-gradient(70% 55% at 18% 22%, rgba(200,16,46,.16), transparent 62%),
+    radial-gradient(60% 50% at 84% 68%, rgba(255,214,140,.10), transparent 60%);
+}
+.l3 {
+  background:
+    repeating-linear-gradient(115deg, rgba(255,255,255,.030) 0 2px, transparent 2px 9px);
+  opacity: .5;
+}
+
+#gl {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 1;
+  /* the grid handles the gesture itself; without this the browser also
+     scrolls and pinch-zooms, which is what made touch dragging feel wrong */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* --------------------------------------------------------------------- hud */
+.hud {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 3;
+  padding: clamp(14px, 2.4vw, 30px);
+  pointer-events: none;
+  color: var(--paper);
+  mix-blend-mode: normal;
+}
+.hud h1 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: clamp(19px, 2.1vw, 30px);
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+/* forced wrap: "The New Yorker" on line one, "Cover Archive" on line two,
+   with identical type treatment and size to the first line */
+.hud h1 span {
+  display: block;
+}
+
+
+.credit {
+  position: fixed;
+  z-index: 4;
+  right: clamp(14px, 2.4vw, 30px);
+  bottom: clamp(30px, 4vw, 50px);
+  color: var(--paper);
+  font-size: clamp(10px, .85vw, 12px);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .22s ease, transform .22s ease;
+  pointer-events: none;
+}
+.credit.on { opacity: .8; transform: none; pointer-events: auto; }
+.credit:hover { opacity: 1; }
+
+/* colophon, in the bottom-left slot the hovered-issue readout used to hold */
+.colophon {
+  position: fixed;
+  z-index: 3;
+  left: clamp(14px, 2.4vw, 30px);
+  bottom: clamp(30px, 4vw, 50px);
+  margin: 0;
+  pointer-events: none;
+  color: rgba(244, 241, 234, .42);
+  font-size: clamp(10px, .85vw, 12px);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.colophon {
+  display: flex;
+  align-items: center;
+  gap: .55em;
+}
+/* the source svg ships fill="black", which vanishes on this background, so the
+   path uses currentColor and inherits the colophon's muted tone instead */
+.colophon__heart {
+  flex: none;
+  opacity: .8;
+}
+/* the colophon is inert so it never eats drags across the grid; the link
+   opts back in and carries the muted tone until hovered */
+/* underline grows out from the centre rather than sliding in from the left */
+.colophon__link {
+  position: relative;
+  pointer-events: auto;
+  color: inherit;
+  text-decoration: none;
+  transition: opacity .2s ease;
+}
+.colophon__link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  opacity: 1;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .28s ease;
+}
+.colophon__link:hover,
+.colophon__link:focus-visible {
+  opacity: .85;
+}
+.colophon__link:hover::after,
+.colophon__link:focus-visible::after {
+  transform: scaleX(1);
+}
+.colophon__link:focus-visible { outline: none; }
+
+/* ------------------------------------------------------------------- pane */
+.pane {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  z-index: 6;
+  width: min(420px, 92vw);
+  /* top padding clears the close button so cover and button never overlap */
+  padding: clamp(56px, 5.2vw, 68px) clamp(18px, 2.2vw, 30px) clamp(24px, 3vw, 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #121216;
+  background: var(--pane-bg, #121216);
+  background-image: radial-gradient(120% 70% at 50% 0%,
+    var(--pane-glow, rgba(255,255,255,.06)) 0%, transparent 62%);
+  border-left: 1px solid rgba(244, 241, 234, .10);
+  color: var(--paper);
+  transform: translateX(100%);
+  transition: transform .38s cubic-bezier(.22, .61, .36, 1);
+  will-change: transform;
+}
+.pane.open { transform: none; }
+.pane__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  /* visual only. It sat above the canvas and swallowed every tap meant for
+     the grid, so a second tap closed the pane instead of opening that
+     cover. Dismissal is handled in the canvas tap handler instead. */
+  pointer-events: none;
+  background: rgba(6, 6, 8, .5);
+  opacity: 0;
+  transition: opacity .38s ease;
+}
+.pane__scrim.on { opacity: 1; }
+
+.pane__close {
+  position: absolute;
+  top: 10px; right: 14px;
+  z-index: 2;
+  width: 38px; height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(244, 241, 234, .08);
+  color: var(--paper);
+  font: 300 26px/1 var(--font-body);
+  cursor: pointer;
+  transition: background .2s ease, transform .2s ease;
+}
+.pane__close:hover { background: rgba(244, 241, 234, .18); transform: rotate(90deg); }
+.pane__close:focus,
+.pane__close:focus-visible { outline: none; }
+
+.pane__scroll { display: flex; flex-direction: column; gap: 1.1rem; }
+
+.pane__fig { margin: 0; position: relative; }
+.pane__fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  background: #1b1b20;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+}
+
+/* placeholder while the full-res file decodes: the figure holds its aspect so
+   the pane does not reflow, and no previous cover is ever left on screen */
+.pane__fig::before {
+  content: "";
+  display: block;
+  padding-top: 136.5%;            /* 1 / 0.7326, the cover proportion */
+  border-radius: 2px;
+  background: linear-gradient(100deg, #1a1a1f 30%, #23232a 50%, #1a1a1f 70%)
+              0 0 / 250% 100%;
+  animation: paneSheen 1.15s linear infinite;
+}
+.pane__fig.is-loading::before { opacity: 1; }
+.pane__fig:not(.is-loading)::before { display: none; }
+.pane__fig:has(img[src])::before { display: none; }
+@keyframes paneSheen {
+  from { background-position: 120% 0; }
+  to   { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane__fig::before { animation: none; }
+}
+.pane__fig figcaption {
+  margin-top: .7rem;
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(244, 241, 234, .55);
+}
+
+.pane__date {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: clamp(26px, 2.4vw, 34px);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: .01em;
+}
+
+.pane__meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  font-size: 13.5px;
+  border-top: 1px solid rgba(244, 241, 234, .12);
+  padding-top: 1rem;
+}
+.pane__row {
+  display: grid;
+  grid-template-columns: 5.2rem 1fr;
+  gap: 0 1rem;
+}
+.pane__row[hidden] { display: none; }
+.pane__meta dt {
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, .40);
+  padding-top: .18em;
+}
+.pane__meta dd { margin: 0; line-height: 1.45; }
+
+.pane__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(244, 241, 234, .42);
+}
+.pane__note:empty { display: none; }
+
+
+/* ------------------------------------------------------------------ cursor
+   The X glyph is the cursor. The native one is suppressed only on precise
+   pointers, so touch and hybrid devices keep a real cursor and the stalker
+   stays hidden there via the hover:none rule below. */
+.stalker {
+  position: fixed;
+  top: 0; left: 0;
+  width: 16px; height: 16px;
+  pointer-events: none;
+  z-index: 9;
+  will-change: transform;
+}
+.stalker svg { display: block; }
+.stalker.dragging svg { transform: scale(.82); }
+
+@media (hover: hover) and (pointer: fine) {
+  html, body, canvas, .pane, .credit, .colophon__link { cursor: none; }
+}
+
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: #0d0d10;
+  color: rgba(244,241,234,.6);
+  font-size: 12px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  transition: opacity .5s ease;
+}
+.loader.done { opacity: 0; pointer-events: none; }
+
+@media (hover: none) { .stalker { display: none; } }
+
+/* ------------------------------------------------------------------ mobile
+   The pane becomes a bottom sheet: on a phone a 420px side panel leaves no
+   room for the grid, and a thumb reaches the bottom of the screen far more
+   easily than the top-right corner. */
+/* The earlier query was (max-width:700px), (pointer:coarse) and (max-width:900px).
+   A landscape phone is 932px wide, so it matched neither and fell back to the
+   side panel. Any coarse pointer now gets the sheet regardless of width, and
+   short viewports are covered as well. */
+/* The sheet layout is applied by a class set from JS, using the same coarse
+   pointer check and viewport numbers the grid already uses. A media query
+   here could disagree with the grid's own idea of the layout, which is how
+   the sheet ended up inconsistent across devices. */
+.pane.sheet {
+  inset: auto 0 0;
+  top: auto; left: 0; right: 0; bottom: 0;
+  width: 100%;
+  max-height: 90vh;
+  border-left: 0;
+  border-top: 1px solid rgba(244, 241, 234, .12);
+  border-radius: 16px 16px 0 0;
+  transform: translateY(100%);
+  padding: clamp(40px, 5vw, 52px) clamp(16px, 5vw, 24px) clamp(20px, 4vw, 28px);
+}
+.pane.sheet.open { transform: none; }
+.pane.sheet .pane__close { top: 8px; right: 12px; }
+.pane.sheet .pane__fig img { max-height: 44vh; width: auto; margin: 0 auto; }
+.pane.sheet .pane__fig figcaption { text-align: center; }
+.pane.sheet .pane__date { font-size: clamp(22px, 6vw, 28px); }
+
+@media (max-width: 700px) {
+  .hud { padding: 14px 16px; }
+  .hud h1 { font-size: 17px; }
+  .colophon { font-size: 9.5px; letter-spacing: .1em; }
+}
+
+/* ---- detail pane additions for the Times Magazine build ------------------
+   The crew block is a list of role/name pairs parsed from free text, so it
+   is a label-and-value list rather than the two fixed rows the New Yorker
+   pane used. Roles sit in a fixed column so the names align into a readable
+   edge however long the role names are. */
+.pane__row--crew .pane__meta {
+  border-top: 1px solid rgba(244, 241, 234, .12);
+  gap: .3rem;
+}
+.pane__row--crew .pane__meta > div {
+  display: grid;
+  grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr);
+  gap: .7rem;
+  align-items: baseline;
+}
+.pane__row--crew .pane__meta dt { padding-top: 0; }
+.pane__row--crew .pane__meta dd { min-width: 0; overflow-wrap: anywhere; }
+
+.pane__source {
+  display: inline-block;
+  margin-top: 1.15rem;
+  font-size: 11px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, .46);
+  text-decoration: none;
+  transition: color .2s ease;
+}
+.pane__source[hidden] { display: none; }
+.pane__source:hover { color: rgba(244, 241, 234, .92); }
+
+.pane__fig figcaption:empty { display: none; }
