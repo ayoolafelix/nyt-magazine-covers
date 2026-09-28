@@ -94,6 +94,89 @@ def check_credits(root):
     return fails
 
 
+def check_textures(root):
+    """Every grid texture must already sit at the cell aspect.
+
+    contain() letterboxes anything that does not, and a band of bare canvas is
+    what made tiles look broken. The textures are padded at build time so
+    contain() is an exact fit; this asserts it, since a texture that drifts
+    back off-aspect shows up only as a visual defect.
+    """
+    fails = []
+
+    def check(ok, label, detail=""):
+        print(f"  {'PASS' if ok else 'FAIL'}  {label}{('  -> ' + detail) if detail and not ok else ''}")
+        if not ok:
+            fails.append(label)
+
+    def webp_size(path):
+        """Width and height from the WebP container.
+
+        Read from the file rather than through Pillow so the harness runs under
+        a plain python3 as well as the project venv; the VP8L/VP8X/VP8 headers
+        all carry the dimensions, and sips is available as a fallback.
+        """
+        with open(path, "rb") as f:
+            head = f.read(64)
+            if head[:4] != b"RIFF" or head[8:12] != b"WEBP":
+                return None
+            fourcc = head[12:16]
+            if fourcc == b"VP8 ":
+                # lossy: 3-byte frame tag, then 2-byte sync, then w/h
+                b = head[26:30]
+                w = int.from_bytes(b[0:2], "little") & 0x3FFF
+                h = int.from_bytes(b[2:4], "little") & 0x3FFF
+                return w, h
+            if fourcc == b"VP8L":
+                b = head[21:25]
+                bits = int.from_bytes(b, "little")
+                return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+            if fourcc == b"VP8X":
+                w = int.from_bytes(head[24:27], "little") + 1
+                h = int.from_bytes(head[27:30], "little") + 1
+                return w, h
+        out = subprocess.run(["sips", "-g", "pixelWidth", "-g", "pixelHeight", path],
+                             capture_output=True, text=True).stdout
+        mw = re.search(r"pixelWidth:\s*(\d+)", out)
+        mh = re.search(r"pixelHeight:\s*(\d+)", out)
+        if mw and mh:
+            return int(mw.group(1)), int(mh.group(1))
+        return None
+
+    src = open(os.path.join(root, "src", "main.js"), encoding="utf-8").read()
+    m = re.search(r"const\s+COVER_AR\s*=\s*([0-9.]+)", src)
+    check(m is not None, "COVER_AR is declared in main.js")
+    if not m:
+        return fails
+    ar = float(m.group(1))
+
+    covers = json.load(open(os.path.join(root, "public", "covers.json"), encoding="utf-8"))
+    off, missing = [], []
+    for c in covers:
+        p = os.path.join(root, "public", c["grid"])
+        if not os.path.exists(p):
+            missing.append(c["d"])
+            continue
+        size = webp_size(p)
+        if size is None:
+            missing.append(c["d"])
+            continue
+        w, h = size
+        cur = w / h
+        pad = (1 - ar / cur) if cur > ar else (1 - cur / ar)
+        if pad > 0.005:
+            off.append((c["d"], cur, pad))
+
+    print(f"\ngrid textures (cell aspect {ar})")
+    check(not missing, "every cover has its texture",
+          f"{len(missing)} missing e.g. {missing[:3]}")
+    check(not off, "every texture already sits at the cell aspect",
+          f"{len(off)} off e.g. {[(d, f'{p*100:.1f}%') for d, _, p in off[:3]]}")
+    print(f"  {len(covers)} textures, largest residual padding "
+          f"{max((p for _, _, p in off), default=0)*100:.2f}%")
+    return fails
+
+
 def main():
     html, js, css = built()
     fails = []
@@ -179,6 +262,7 @@ def main():
           f"{len(phone)} phone blocks, none restyles .pane__row to one column")
 
     fails += check_credits(ROOT)
+    fails += check_textures(ROOT)
 
     print()
     if fails:

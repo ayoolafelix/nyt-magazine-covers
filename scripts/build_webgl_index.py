@@ -306,6 +306,23 @@ def display_date(cid, approx):
     return f"{'≈ ' if approx else ''}{MONTHS[int(m) - 1]} {int(d)}, {y}"
 
 
+# Scans that are not a single cover. These cannot be fixed by adjusting the
+# cell aspect, because there is no one cover in the image to frame:
+#
+#   2011-07-04  a page holding four covers at once, each with its own
+#               masthead. Padding it to the cell aspect just stretches the
+#               white gutter between them.
+#
+# Every other cover that differs from the median proportion is legitimate:
+# 2019-03-24-2 and 2008-04-30 are taller covers, 2025-06-11 is a square
+# layout, and scans of bound volumes such as 1964-01-06 include the spine
+# and paper edge around the printed cover. Those are padded at build time
+# instead, by scripts/pad_grid_textures.py.
+EXCLUDE = {
+    "2011-07-04": "scan holds four covers on one page, not a single cover",
+}
+
+
 def pixels(c):
     px = c.get("px") or []
     return px[0] * px[1] if len(px) == 2 and px[0] and px[1] else 0
@@ -327,8 +344,14 @@ def main():
         cur = best.get(key)
         if cur is None or pixels(c) > pixels(cur):
             best[key] = c
-    covers = sorted(best.values(), key=lambda c: c["id"])
+    # Drop scans that are not a single cover at all, before the per-issue
+    # choice, so the reason a date is missing stays visible in the log.
+    excluded = [c for c in best.values() if c["id"] in EXCLUDE]
+    covers = sorted((c for c in best.values() if c["id"] not in EXCLUDE),
+                    key=lambda c: c["id"])
     dropped = len(raw) - len(covers)
+    for c in sorted(excluded, key=lambda x: x["id"]):
+        print(f"excluded {c['id']}: {EXCLUDE[c['id']]}")
 
     out, meta = [], {}
     aspects, hit_credit, hit_crew = [], 0, 0
